@@ -1,0 +1,209 @@
+---
+title: "Endometriosis Interview Analysis"
+output:
+  html_document: default
+classoption: landscape
+fontsize: 14pt
+
+---
+```{r libs, echo=FALSE, message=FALSE, include=FALSE}
+source("/Users/nicolenisbett/Documents/PhD/R/Supreme/global.R")
+library(gridExtra)
+
+```
+
+```{r functions, echo=FALSE, message=FALSE, include=FALSE, cache=TRUE}
+endo.file=read_csv("/Users/nicolenisbett/OneDrive - University of Leeds/PhD/Data/Surveys/EndoInterview.csv")
+#names(endo.file)=c("Message", "Message", "Message")
+#endo.file=rbind(endo.file[,1], endo.file[,2], endo.file[,3])
+endo.comments=get_comments(endo.file, "Endo")
+#endo.hours=get_hours_fb(endo.file, "VisitorVisaComments")
+#endo.dates=get_dates_fb(endo.file, "VisitorVisaDebate")
+endo.corpus=clean_corpus(prep_corpus(endo.comments))
+endo.corpus.df=get_corpus_df(endo.corpus)
+endo.frequencies=term_stats(endo.corpus)
+endo.dtm=get_dtm(endo.corpus)
+endo.dtm.bigram=get_dtm_bigram(endo.corpus)
+
+ud_model <- udpipe_download_model(language = "english")
+ud_model <- udpipe_load_model(ud_model$file_model)
+endo.ud=get_ud_data(endo.comments)
+endo.8topics=get_topic_model(endo.dtm, 5)
+endo.8topics.bigram=get_topic_model(endo.dtm.bigram, 5)
+endo.idf = get_topic_idf(endo.8topics, endo.comments)
+
+
+#endo.readability=get_readability(endo.comments)
+#endo.ages=estimate_ages(endo.ud, endo.readability)
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This report gives a brief summary of the textual analysis of the KD Interview on Endometriosis.
+
+
+## Frequency Analysis
+
+The most common adjectives, phrases and pairs of words are displayed below. 
+```{r frequencies, echo=FALSE,  tidy=TRUE, fig.width=10}
+{grid.arrange(display_adjectives(endo.ud, 10), display_keywords(endo.ud, 10), ncol=2)}
+```
+
+
+
+A network of the most frequent consecutive word pairs (bigrams) is shown below. 
+
+
+```{r bigrams, echo=FALSE, tidy=TRUE, fig.width=15, fig.height=10}
+display_bigrams(endo.comments, 1, "Endo Interview")
+
+```
+
+
+***
+
+## Topic Extraction
+
+A plot of words most associated with one of 3 topics are shown below. 
+<!---
+A brief summary of those topics are:
+
+Topic Number  | Common bigrams
+-------- | ------------------
+Topic 1  | mental health, blood sugars, life saving, self fund
+Topic 2  | complete ban, trail hinting,
+Topic 3  | funding needed, psychological support, available prescription, avoiding complications
+Topic 4  | adult care, self management, managing condition
+Topic 5  | long term, daughter diagnosed
+Topic 6  | closed loop system, medical conditions, change diet, diabetes team
+Topic 7  | healthcare, newly diagnosed
+Topic 8  | basal insulin, checking blood, development type, weight gain
+Topic 9  | postcode lottery, mental health, urine test
+Topic 10  | nodeal brexit, quality of life, reassuring people, manage condition
+--> 
+
+<!---\begin{center}
+\end{center}
+![](Diabetes bigram topics.pdf)  
+
+
+\begin{center}
+\includegraphics{Diabetes bigram topics.pdf}
+\end{center}
+--> 
+
+```{r, echo=FALSE, message=FALSE}
+#display_top_topics(endo.8topics, 5, "Endo Interview")
+
+endo.idf %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>% 
+  group_by(Topic) %>% 
+  top_n(10) %>% 
+  ungroup() %>%
+  ggplot(aes(word, tf_idf, fill = as.factor(Topic))) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~Topic, ncol = 4, scales = "free") +
+  coord_flip()
+
+```
+
+<!--
+```{r twordcloud, echo=FALSE, message=FALSE, warning=FALSE}
+myColourHue= function(n=10) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 45, c = 100)[1:n]
+}
+get_topic_wordcloud(endo.8topics)
+```
+-->
+
+
+
+Topic model visualisations are split into two sections:
+
+  * **Left** - showing topic distances from each other based on the types of words in each,
+
+  * **Right** – showing the top 30 words in each topic (red bar) and overall in the dataset (blue bar). I recommend setting the relavance metric to 0.6 to get a more representative list of words in each topic.
+
+This visualisation is interactive, hover over each topic number to view the words in each topic, or select each word to view which topics it appears.  
+
+https://nicolednisbett.github.io/#topic=0&lambda=0.6&term=
+<!--
+```{r servis, echo=FALSE, message=FALSE, warning=FALSE}
+serVis(topicmodels2LDAvis(endo.8topics), out.dir="a", open.browser = FALSE)
+htmltools::includeHTML("a/index.html")
+```
+
+<head>
+  <script src="a/d3.v3.js"></script>
+  <script src="a/ldavis.js"></script>
+  <link rel="stylesheet" type="text/css" href="a/lda.css">
+</head>
+<body>
+  <div id = "mydiv"></div>
+  <script>
+    var vis = new LDAvis("#mydiv", "lda.json");
+  </script>
+</body>
+
+
+<iframe width="1000" height="800" src="a/index.html" frameborder="0"></iframe>
+
+-->
+
+
+## Sentiment Analysis
+
+The wordcloud below gives the most popular words associated with positive and negative sentiments in the survey. Specific comments
+which are associated with the most popular sentiments are listed below.
+
+```{r swordcloud, echo=FALSE, message=FALSE, warning=FALSE}
+get_sentiments_wordcloud(get_bingnrc_word_frequencies(endo.corpus.df, "bing"), "bing")
+```
+
+
+
+The  **NRC** sentiment lexicon uses categorical scale to measure 2 sentiments (positive and negative), and 8 emotions (anger, anticipation, disgust, trust, joy, sadness, fear, and suprise).
+Examples of words and comments in these sentiment categories are below. In this interview, the majority of submissions were *trust* but also categorised as *anticipation*, *positive* and *joy*. 
+
+```{r nrc2, echo=FALSE, message=FALSE}
+  plot_bingnrc_distributions(get_bingnrc_document_frequencies(endo.corpus,"nrc"), "Endo Interview", "nrc")
+  
+```
+
+
+Hover over the plot below to read the content of the comments within each sentiment category.
+
+```{r comments,echo=FALSE, message=FALSE, warning=FALSE }
+ggplotly(display_topic_comments(get_sentiment_comments(endo.corpus.df, endo.comments, "nrc"), "Endo Interview"), width=1000, height = 600) %>% config(displayModeBar=FALSE) %>% hide_legend()
+```
+
+
+***
+
+
+An example of a comment categorised as **anticipation**
+
+  > `r endo.comments[4,][[1]]`
+
+An example of a comment categorised as **positive**
+
+  > `r endo.comments[11,][[1]]`
+
+An example of a comment categorised as **trust**
+
+  > `r endo.comments[5,][[1]]`
+
+An example of a comment categorised as **joy**
+
+  > `r endo.comments[7,][[1]]`
+
+An example of a comment categorised as **negative**
+
+  > `r endo.comments[17,][[1]]`
